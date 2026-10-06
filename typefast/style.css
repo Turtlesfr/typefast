@@ -1,0 +1,235 @@
+/* Overlay and HUD share one dark glass look, independent of the desktop theme. */
+
+.tf-window {
+  background-color: transparent;
+}
+
+.tf-card {
+  background-color: rgba(27, 31, 40, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 14px;
+  padding: 18px 20px 14px 20px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  color: #eef1f6;
+}
+
+.tf-brand {
+  font-weight: bold;
+  font-size: 15px;
+  letter-spacing: 0.5px;
+}
+
+.tf-hint, .tf-rows, .tf-foot label, .tf-jump {
+  color: #9aa4b5;
+  font-size: 12px;
+}
+
+.tf-section {
+  color: #9aa4b5;
+  font-size: 11px;
+  letter-spacing: 1.2px;
+}
+
+.tf-count {
+  color: #f2b544;
+  font-size: 13px;
+}
+
+.tf-jump {
+  font-family: "Ubuntu Mono", monospace;
+  font-size: 13px;
+}
+
+.tf-jump-hit {
+  color: #f2b544;
+}
+
+.tf-jump-miss {
+  color: #ff9a92;
+}
+
+.tf-lang {
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 10px;
+  background-color: rgba(255, 255, 255, 0.03);
+  padding: 9px 12px;
+}
+
+.tf-lang-code {
+  font-family: "Ubuntu Mono", monospace;
+  font-weight: bold;
+  font-size: 24px;
+}
+
+.tf-lang-name {
+  color: #9aa4b5;
+  font-size: 12px;
+}
+
+.tf-lang.tf-on {
+  background-color: #f2b544;
+  border-color: #f2b544;
+}
+
+.tf-lang.tf-on .tf-lang-code, .tf-lang.tf-on .tf-lang-name {
+  color: #2a1d05;
+}
+
+.tf-lang.tf-on.tf-dim {
+  background-color: rgba(242, 181, 68, 0.16);
+  border-color: rgba(242, 181, 68, 0.5);
+}
+
+.tf-lang.tf-on.tf-dim .tf-lang-code {
+  color: #eef1f6;
+}
+
+.tf-lang.tf-on.tf-dim .tf-lang-name {
+  color: #9aa4b5;
+}
+
+.tf-style {
+  font-size: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 3px 12px;
+  color: #cfd5df;
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.tf-style.tf-on {
+  background-color: #f2b544;
+  border-color: #f2b544;
+  color: #2a1d05;
+}
+
+.tf-style.tf-on.tf-dim {
+  background-color: rgba(242, 181, 68, 0.16);
+  border-color: rgba(242, 181, 68, 0.5);
+  color: #ffe2a6;
+}
+
+.tf-style-desc {
+  color: #9aa4b5;
+  font-size: 12px;
+}
+
+.tf-cell {
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 7px;
+  background-color: rgba(255, 255, 255, 0.035);
+  padding: 0 10px 0 9px;
+  color: #cfd5df;
+}
+
+.tf-cell label {
+  font-size: 13px;
+}
+
+.tf-check {
+  min-width: 8px;
+  min-height: 8px;
+  border-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+}
+
+.tf-cell.tf-sel {
+  background-color: rgba(242, 181, 68, 0.17);
+  border-color: rgba(242, 181, 68, 0.55);
+}
+
+.tf-cell.tf-sel label {
+  color: #ffe2a6;
+}
+
+.tf-cell.tf-sel .tf-check {
+  background-color: #f2b544;
+  border-color: #f2b544;
+}
+
+.tf-cell.tf-focus {
+  border: 2px solid #f2b544;
+  padding: 0 9px 0 8px;
+}
+
+.tf-cell.tf-focus label {
+  color: #ffffff;
+}
+
+.tf-cell.tf-sel.tf-focus {
+  background-color: #f2b544;
+}
+
+.tf-cell.tf-sel.tf-focus label {
+  color: #2a1d05;
+}
+
+.tf-cell.tf-sel.tf-focus .tf-check {
+  background-color: #2a1d05;
+  border-color: #2a1d05;
+}
+
+.tf-empty {
+  color: #9aa4b5;
+  font-size: 13px;
+}
+
+.tf-msg {
+  color: #ffd27a;
+  font-size: 12px;
+}
+
+.tf-foot {
+  border-top: 1px solid rgba(255, 255, 255, 0.10);
+  padding-top: 10px;
+}
+
+.tf-kbd {
+  font-family: "Ubuntu Mono", monospace;
+  font-size: 11px;
+  color: #eef1f6;
+  border: 1px solid rgba(255, 255, 255, 0.20);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0 5px;
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* HUD */
+
+.tf-hud {
+  padding: 11px 14px;
+}
+
+.tf-chip {
+  font-family: "Ubuntu Mono", monospace;
+  font-weight: bold;
+  font-size: 12px;
+  background-color: rgba(255, 255, 255, 0.10);
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+
+.tf-status {
+  color: #9aa4b5;
+  font-size: 13px;
+}
+
+.tf-timer {
+  font-family: "Ubuntu Mono", monospace;
+  font-size: 13px;
+}
+
+.tf-live {
+  font-size: 14px;
+  color: #eef1f6;
+}
+
+.tf-hud-hint {
+  color: #9aa4b5;
+  font-size: 11px;
+}
+
+.tf-hud-error .tf-status {
+  color: #ff9a92;
+}

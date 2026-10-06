@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+# Design-phase mockup with sample data; the README uses real screenshots.
+docs/mockups/
