@@ -235,6 +235,21 @@ class TestKeyPlanning:
         assert plan_key(0x21, table, True, False) == (10, True)   # Caps Lock leaves symbols alone
         assert plan_key(0xE9, table, False, True) is None          # missing: goes to a spare key
 
+    def test_spare_keys_wiped_by_a_keymap_reset_are_forgotten(self):
+        from collections import OrderedDict
+        from typefast.xkeys import KeyInjector
+
+        class FakeDisplay:  # the server's keymap after GNOME re-applied the layout
+            rows = {93: (0, 0), 97: (0xE0, 0xE0)}   # é's spare key was emptied, à's survived
+            def get_keyboard_mapping(self, kc, count):
+                return [self.rows[kc]]
+
+        keys = object.__new__(KeyInjector)   # no X connection needed
+        keys.d = FakeDisplay()
+        keys._bound = OrderedDict([(0xE9, 93), (0xE0, 97)])
+        keys._drop_lost_bindings()
+        assert dict(keys._bound) == {0xE0: 97}   # é will be bound again instead of pressing an empty key
+
 
 def test_settle_only_on_direction_change():
     from typefast.injector import DIRECTION_SETTLE_S, settle_delay

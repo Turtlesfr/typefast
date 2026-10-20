@@ -131,6 +131,7 @@ class KeyInjector:
             # Someone changed the keymap; make libX11's XKB copy re-read it too.
             _x11.XCloseDisplay(self._xkb)
             self._xkb = _x11.XOpenDisplay(None)
+            self._drop_lost_bindings()
             force = True
         if not force and group == self._group:
             return
@@ -157,6 +158,21 @@ class KeyInjector:
                                 for kc, _ in self.d.keysym_to_keycodes(XK.string_to_keysym(name))}
         self._shift = self.d.keysym_to_keycode(XK.XK_Shift_L)
 
+    def _holds(self, keycode: int, keysym: int) -> bool:
+        """Whether the server's keymap has `keysym` on `keycode` (always asks the server)."""
+        return self.d.get_keyboard_mapping(keycode, 1)[0][0] == keysym
+
+    def _drop_lost_bindings(self) -> None:
+        """Forget spare keys someone else emptied, so their symbols get bound again.
+
+        GNOME re-applies the whole layout on an input source switch, a resume or a
+        keyboard hotplug, which wipes our spare keycodes; pressing one then types nothing.
+        """
+        for keysym, kc in list(self._bound.items()):
+            if not self._holds(kc, keysym):
+                del self._bound[keysym]
+                log.info("keycode %d lost keysym %#x to a keymap change", kc, keysym)
+
     def _bind(self, keysym: int) -> int:
         """Put `keysym` on a spare keycode, in every layout slot."""
         if self._free and len(self._bound) < self.max_spare:
@@ -169,7 +185,8 @@ class KeyInjector:
         per = len(self.d.get_keyboard_mapping(kc, 1)[0])
         self.d.change_keyboard_mapping(kc, [(keysym,) * per])
         self.d.sync()
-        self._drain_mapping_events()
+        # Its MappingNotify is left for _refresh: draining it here could swallow another
+        # client's keymap change arriving at the same time.
         self._bound[keysym] = kc
         self._table[keysym] = (kc, 0)
         time.sleep(BIND_SETTLE_S)
@@ -178,8 +195,10 @@ class KeyInjector:
 
     def restore(self) -> None:
         """Give the spare keycodes back (empty them)."""
-        for kc in self._bound.values():
+        for keysym, kc in self._bound.items():
             try:
+                if not self._holds(kc, keysym):
+                    continue  # the keymap was reset since: this keycode is not ours to empty
                 per = len(self.d.get_keyboard_mapping(kc, 1)[0])
                 self.d.change_keyboard_mapping(kc, [(X.NoSymbol,) * per])
             except Exception:  # noqa: BLE001
