@@ -51,6 +51,8 @@ heard; clicks go straight through it.
 
 **3. Tap Ctrl three times again.** The live text is swapped for the polished version.
 Only what TypeFast typed is replaced: anything that was already in the field stays.
+After a long dictation the swap takes a few seconds; the bar shows its progress and
+the time left, so keep your hands off the keyboard and mouse until it is done.
 
 <img src="docs/screenshots/hud-done.png" alt="The live bar when the polished text is in" width="640">
 
@@ -92,8 +94,8 @@ this dictation (up to 100) and they are sent along with the audio.
 <img src="docs/screenshots/overlay-vocabulary.png" alt="Type-ahead in the vocabulary grid" width="860">
 
 Type a few letters to jump to a word: `cond` lands on *Las Condes*. Type a word that is
-not there yet and press **Enter** to add it, already ticked; `Ctrl`+`Enter` adds it even
-when it matches an existing word, and `Space` lets you type multi-word terms.
+not there yet and press **Enter** to add it, already ticked, even when it is the start of a
+longer word (`Java` next to *JavaScript*). `Space` lets you type multi-word terms.
 
 <img src="docs/screenshots/overlay-new-word.png" alt="Adding a new word from the overlay" width="860">
 
@@ -227,6 +229,7 @@ need a real X session or the real API:
 | `scripts/typer_check.py` | Live typing, corrections, a held Ctrl, typed and pasted swaps, in a throwaway window. |
 | `scripts/paste_check.py` | The paste path against an app that reads the clipboard late, like Chrome on Gmail. |
 | `scripts/chrome_paste_check.py` | The same in a real Chrome (temporary profile), checked through DevTools. |
+| `scripts/long_swap_check.py` | The swap after a 5 minute dictation, timed, in a GTK field and in Chrome. |
 | `scripts/e2e_pipeline.py` | A 16 kHz mono PCM file through the live and polish passes with your key. |
 
 Project layout:

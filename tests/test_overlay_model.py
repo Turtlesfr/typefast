@@ -133,6 +133,17 @@ def test_ctrl_enter_adds_even_when_letters_match(tmp_path):
     assert "SAP" in m.words and "SAP" in m.vocab.selected
 
 
+def test_enter_adds_the_start_of_a_longer_word(tmp_path):
+    v = Vocabulary(tmp_path / "v.json")
+    v.add("JavaScript")
+    m = OverlayModel(["en"], 0, v, cols=5, lang_cols=1)
+    type_text(m, "Java")
+    assert m.words[m.vi] == "JavaScript" and not m.miss   # still jumps to the longer word
+    assert m.key("Return", "", 20.0) is None               # adds, does not start
+    assert m.words == ["Java", "JavaScript"]
+    assert m.vocab.selected == {"Java"} and m.words[m.vi] == "Java"
+
+
 def test_space_continues_a_new_word(model):
     type_text(model, "Banco")
     press(model, "space", now=11.0)

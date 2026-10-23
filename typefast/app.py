@@ -57,7 +57,7 @@ class TypeFastApp:
         self.cfg = config.load()
         self.vocab = Vocabulary()
         self.history = History()
-        self.state = "idle"          # idle | overlay | recording | polishing
+        self.state = "idle"          # idle | overlay | recording | polishing | replacing
         self.overlay: Overlay | None = None
         self.session: DictationSession | None = None
         self.settings_win = None
@@ -141,7 +141,7 @@ class TypeFastApp:
 
     def _on_user_input(self, kind: str = "key") -> None:
         """A real key or click. Once text is in the field, that makes in-place edits unsafe."""
-        if self.state not in ("recording", "polishing") or self.typer.frozen or not self.typer.typed:
+        if self.state not in ("recording", "polishing", "replacing") or self.typer.frozen or not self.typer.typed:
             return
         self.typer.freeze()
         self.freeze_reason, self.freeze_time = kind, time.monotonic()
@@ -310,13 +310,17 @@ class TypeFastApp:
                                seconds=6)
             return False
 
-        def replaced(ok: bool, _reason: str) -> None:
-            GLib.idle_add(self._after_replace, ok, text, session, result)
+        def replaced(ok: bool, reason: str) -> None:
+            GLib.idle_add(self._after_replace, ok, reason, text, session, result)
 
+        # The polish is done; a long live text still takes a few seconds to swap.
+        self.state = "replacing"
+        self.tray.set_state("replacing")
+        self.hud.show_replacing(self.typer.swap_progress, time.monotonic() - session.stopped_at, text)
         self.typer.replace(text, self.first_window, replaced)
         return False
 
-    def _after_replace(self, ok: bool, text: str, session, result) -> bool:
+    def _after_replace(self, ok: bool, reason: str, text: str, session, result) -> bool:
         self._remember(session, text, result)
         if session is not self.session:
             return False  # cancelled, or a new dictation already started
@@ -332,7 +336,19 @@ class TypeFastApp:
             self.hud.show_done(f"{label} · {words} words", " ".join(notes))
         else:
             copy_to_clipboard(text)
-            self.hud.show_done("Copied to the clipboard", "Another window has the focus now. Paste with Ctrl+V.", seconds=6)
+            touched = self.freeze_reason in ("key", "click")
+            if reason == "interrupted":
+                cause = "You used the keyboard or mouse" if touched else "Another window took the focus"
+                self.hud.show_error("Replacement interrupted: the field is incomplete",
+                                    f"{cause}, so typing stopped. The polished text is in the clipboard: "
+                                    "select what is left of the dictation and paste with Ctrl+V.", seconds=12)
+            elif touched:
+                self.hud.show_done("Copied to the clipboard",
+                                   "You used the keyboard or mouse, so the field was left alone. Paste with Ctrl+V.",
+                                   seconds=6)
+            else:
+                self.hud.show_done("Copied to the clipboard", "Another window has the focus now. Paste with Ctrl+V.",
+                                   seconds=6)
         return False
 
     def _remember(self, session, inserted: str, result) -> None:

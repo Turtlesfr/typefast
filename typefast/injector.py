@@ -11,6 +11,7 @@ import logging
 import subprocess
 import threading
 import time
+from dataclasses import dataclass
 
 from typefast import clipboard, textops
 from typefast.x11 import WindowInfo
@@ -25,6 +26,35 @@ BACKSPACE_BATCH = 120
 # starts right after typing, or typing right after erasing: measured 1 wrong
 # rewrite in 12 with no pause, none in 36 with 30-60 ms.
 DIRECTION_SETTLE_S = 0.06
+# The final swap of a long dictation erases thousands of characters before pasting.
+# A 1 ms pause per Backspace made 5174 of them take 8 s; the swap goes without it.
+LIVE_ERASE_DELAY_MS = 1
+FINAL_ERASE_DELAY_MS = 0
+# Measured cost of each part of the final swap, for the progress shown in the HUD.
+ERASE_KEY_S = 0.0004
+TYPE_KEY_OVERHEAD_S = 0.0006
+PASTE_S = 1.1           # ClipboardServer.paste serves the first requests for 1 s
+
+
+@dataclass
+class SwapProgress:
+    fraction: float       # 0..1
+    seconds_left: float
+    phase: str            # "erase", "type" or "paste"
+
+
+def swap_edit(typed: str, target: str, paste: bool) -> textops.Edit:
+    """The edit the final swap makes. Pasting replaces everything typed, so it erases it all first."""
+    return textops.Edit(len(typed), target) if paste and typed else textops.plan_edit(typed, target)
+
+
+def swap_seconds(typed: str, target: str, paste: bool, delay_ms: int) -> float:
+    """Estimated time left to turn `typed` into `target`."""
+    if typed == target:
+        return 0.0
+    edit = swap_edit(typed, target, paste)
+    insert = PASTE_S if paste else len(edit.insert) * (delay_ms / 1000 + TYPE_KEY_OVERHEAD_S)
+    return edit.backspaces * ERASE_KEY_S + insert
 
 
 def settle_delay(last_op: str | None, op: str, since: float) -> float:
@@ -63,6 +93,8 @@ class Typer:
         self._window = 0            # window that received the first character this session
         self._final = None          # (text, guard_window, callback) waiting to start
         self._final_active = None   # callback waiting for the final text to land
+        self._swap_from = ""        # what was typed when the running final swap started
+        self._paste_started = 0.0   # when the final swap's paste began, 0 when not pasting
         self._closing = False
         self._clip = None           # ClipboardServer, created in the worker thread
         self.pasted = False         # the last final text went in through the clipboard
@@ -88,6 +120,7 @@ class Typer:
             self._window = 0
             self._frozen = False
             self._final = self._final_active = None
+            self._swap_from, self._paste_started = "", 0.0
             self._cond.notify_all()
 
     def set_target(self, text: str) -> None:
@@ -103,12 +136,17 @@ class Typer:
             self._cond.notify_all()
 
     def _fail_final(self, reason: str) -> None:
-        """Abort a pending or running final swap; its callback reports failure."""
+        """Abort a pending or running final swap; its callback reports failure.
+
+        The reason becomes "interrupted" when the swap had already changed the field.
+        """
         cb = None
         if self._final is not None:
             cb = self._final[2]
         elif self._final_active is not None:
             cb = self._final_active
+            if self._typed != self._swap_from:
+                reason = "interrupted"
         self._final = self._final_active = None
         if cb is not None:
             threading.Thread(target=cb, args=(False, reason), daemon=True).start()
@@ -136,6 +174,24 @@ class Typer:
     @property
     def frozen(self) -> bool:
         return self._frozen
+
+    def swap_progress(self) -> SwapProgress | None:
+        """How far the running final swap is, or None when there is none."""
+        with self._cond:
+            if self._final_active is None:
+                return None
+            start, typed, target, pasting = self._swap_from, self._typed, self._target, self._paste_started
+        paste = self._paste_mode(target)
+        total = swap_seconds(start, target, paste, self.delay_ms)
+        left = swap_seconds(typed, target, paste, self.delay_ms)
+        if pasting:
+            left = max(0.1, PASTE_S - (time.monotonic() - pasting))
+        phase = "paste" if paste and not typed else "erase" if swap_edit(typed, target, paste).backspaces else "type"
+        fraction = min(1.0, max(0.0, 1 - left / total)) if total else 1.0
+        return SwapProgress(fraction, left, phase)
+
+    def _paste_mode(self, target: str) -> bool:
+        return "\n" in target or len(target) >= self.paste_threshold
 
     def hold(self, down: bool) -> None:
         with self._cond:
@@ -200,6 +256,7 @@ class Typer:
                     return
                 final, self._final = self._final, None
                 typed, target, gen, window = self._typed, self._target, self._gen, self._window
+                swapping = self._final_active is not None
             try:
                 if final is not None:
                     self._start_final(win, *final)
@@ -207,9 +264,10 @@ class Typer:
                 if keys.modifiers_held():
                     time.sleep(0.03)
                     continue
-                if typed and window and win.active_window() != window:
+                if (typed or swapping) and window and win.active_window() != window:
                     # Focus moved without a click or key (a dialog, a new window):
                     # typing on would land, and Backspace would delete, elsewhere.
+                    # A swap that erased all the live text must not paste elsewhere either.
                     self.freeze()
                     if self.on_moved:
                         self.on_moved()
@@ -239,11 +297,13 @@ class Typer:
         with self._cond:
             self._target = text
             self._final_active = callback
+            self._swap_from = self._typed
             self._cond.notify_all()
 
     def _commit(self, gen: int, typed: str) -> bool:
         """Record the new field content, unless reset() started a new session meanwhile."""
         with self._cond:
+            self._paste_started = 0.0
             if gen != self._gen:
                 return False
             self._typed = typed
@@ -254,13 +314,14 @@ class Typer:
         final_mode = self._final_active is not None
         # Multi-line or long final text goes in by pasting the whole of it: erase all the live
         # text first, so the clipboard (where it stays) holds the complete text.
-        paste_mode = final_mode and ("\n" in target or len(target) >= self.paste_threshold)
-        edit = textops.Edit(len(typed), target) if paste_mode and typed else textops.plan_edit(typed, target)
+        paste_mode = final_mode and self._paste_mode(target)
+        edit = swap_edit(typed, target, paste_mode)
         stop = self._stopper(gen)
         log.debug("step: typed=%r target=%r -> back %d, insert %r", typed[-20:], target[-20:], edit.backspaces, edit.insert[:20])
         if edit.backspaces:
             self._settle("erase")
-            done = keys.backspace(min(edit.backspaces, BACKSPACE_BATCH), stop)
+            done = keys.backspace(min(edit.backspaces, BACKSPACE_BATCH), stop,
+                                  FINAL_ERASE_DELAY_MS if final_mode else LIVE_ERASE_DELAY_MS)
             self._op_done("erase")
             if done:
                 self._commit(gen, typed[: len(typed) - done])
@@ -270,6 +331,11 @@ class Typer:
         first = not typed
         self._settle("type")
         # Line breaks are pasted: a typed Return would send the message in chat apps.
+        if paste_mode:
+            if self._window and win.active_window() != self._window:
+                return False  # focus moved during the settle pause: the next loop freezes the swap
+            with self._cond:
+                self._paste_started = time.monotonic()
         if paste_mode and self._paste(win, keys, edit.insert, stop):
             piece = edit.insert
         else:
@@ -278,6 +344,8 @@ class Typer:
             piece = chunk[:sent]
         self._op_done("type")
         if not piece:
+            with self._cond:
+                self._paste_started = 0.0
             return False
         if self._commit(gen, typed + piece) and first:
             window = win.active_window()

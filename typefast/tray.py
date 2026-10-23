@@ -8,7 +8,8 @@ from gi.repository import Gtk  # noqa: E402
 
 from typefast.ui_common import ICONS_DIR  # noqa: E402
 
-ICONS = {"idle": "typefast-tray", "recording": "typefast-tray-rec", "polishing": "typefast-tray-busy"}
+ICONS = {"idle": "typefast-tray", "recording": "typefast-tray-rec", "polishing": "typefast-tray-busy",
+         "replacing": "typefast-tray-busy"}
 
 
 class Tray:
@@ -44,6 +45,8 @@ class Tray:
         elif self._state == "polishing":
             self._item(menu, "Polishing…", lambda: None, sensitive=False)
             self._item(menu, "Keep the live text", a["keep_live"])
+        elif self._state == "replacing":
+            self._item(menu, "Replacing the live text…", lambda: None, sensitive=False)
         else:
             self._item(menu, f"Start dictation   {self._hint}".rstrip(), a["start"])
         menu.append(Gtk.SeparatorMenuItem())

@@ -214,8 +214,11 @@ class Overlay:
             typed = GLib.markup_escape_text(m.jump)
             if m.miss:
                 text = f'new word: <span weight="bold">{typed}</span>_   Enter adds it and ticks it'
+            elif m.typed_is_new:
+                focused = GLib.markup_escape_text(m.words[m.vi])
+                text = f'jump: <span weight="bold">{typed}</span>_   Space ticks {focused}, Enter adds {typed} as a new word'
             else:
-                text = f'jump: <span weight="bold">{typed}</span>_   Space ticks, keep typing for the next word, Ctrl+Enter adds it as a new word'
+                text = f'jump: <span weight="bold">{typed}</span>_   Space ticks, Enter starts dictating'
             self.jump_label.set_markup(text)
             # Unmatched letters are a new word to add, not an error: same accent color.
             set_class(self.jump_label, "tf-jump-miss", False)

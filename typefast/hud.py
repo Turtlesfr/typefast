@@ -41,6 +41,9 @@ class Hud:
         row.pack_end(self.timer, False, False, 0)
         row.pack_end(self.meter, False, False, 0)
         card.pack_start(row, False, False, 0)
+        self.bar = Gtk.ProgressBar()
+        add_class(self.bar, "tf-progress")
+        card.pack_start(self.bar, False, False, 0)
 
         self.live = label("", "tf-live", wrap=True, lines=2, ellipsize=Pango.EllipsizeMode.START)
         self.live.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
@@ -58,6 +61,8 @@ class Hud:
         self._hide_id = 0
         self._level = 0.0
         self._phase = 0.0
+        self._progress = None      # returns the final swap's SwapProgress while replacing
+        self._polished_s = 0.0
 
     # -- window -------------------------------------------------------------------
 
@@ -79,10 +84,13 @@ class Hud:
             self._hide_id = 0
         self.dot.set_visible(mode == "listening")
         self.meter.set_visible(mode == "listening")
-        self.spinner.set_visible(mode == "polishing")
+        self.spinner.set_visible(mode in ("polishing", "replacing"))
+        self.bar.set_visible(mode == "replacing")
         self.check.set_visible(mode == "done")
         set_class(self.card, "tf-hud-error", mode == "error")
-        if mode == "polishing":
+        if mode != "replacing":
+            self._progress = None
+        if mode in ("polishing", "replacing"):
             self.spinner.start()
         else:
             self.spinner.stop()
@@ -135,6 +143,27 @@ class Hud:
         self.hint.set_text(f"Hands off the keyboard for a moment.   {self.trigger_hint} keeps the live text.")
         self._show("polishing")
 
+    def show_replacing(self, progress, polished_s: float, text: str) -> None:
+        """The polished text is ready and replaces the live text; progress() -> SwapProgress | None."""
+        self._progress = progress
+        self._polished_s = polished_s
+        self.live.set_text(textops.tail(text, 220))
+        self.bar.set_fraction(0.0)
+        self._show("replacing")
+        self._show_progress()
+
+    def _show_progress(self) -> None:
+        p = self._progress() if self._progress else None
+        if p is None:
+            return
+        self.bar.set_fraction(p.fraction)
+        doing = {"erase": "erasing the live text", "type": "typing it in",
+                 "paste": "pasting it in"}.get(p.phase, "replacing the live text")
+        self.status.set_text(f"Polished in {self._polished_s:.1f} s · {doing}")
+        left = math.ceil(p.seconds_left)
+        self.hint.set_text("Hands off the keyboard and mouse: "
+                           + (f"about {left} s left." if left >= 2 else "almost done."))
+
     def show_done(self, message: str, detail: str = "", seconds: float = 3.0) -> None:
         self.status.set_text(message)
         self.hint.set_text(detail)
@@ -160,6 +189,8 @@ class Hud:
             secs = int(s.elapsed)
             self.timer.set_text(f"{secs // 60}:{secs % 60:02d}")
             self._level = s.level
+        if self._mode == "replacing":
+            self._show_progress()
         self._phase = (self._phase + 0.08) % 1.0
         self.dot.queue_draw()
         self.meter.queue_draw()

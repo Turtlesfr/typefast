@@ -233,3 +233,17 @@
 .tf-hud-error .tf-status {
   color: #ff9a92;
 }
+
+.tf-progress trough {
+  min-height: 4px;
+  border: none;
+  border-radius: 2px;
+  background-color: rgba(255, 255, 255, 0.10);
+}
+
+.tf-progress progress {
+  min-height: 4px;
+  border: none;
+  border-radius: 2px;
+  background-color: #f2b544;
+}

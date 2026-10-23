@@ -260,6 +260,82 @@ def test_settle_only_on_direction_change():
     assert settle_delay("erase", "type", 1.0) == 0
 
 
+def idle_typer(**state):
+    import threading
+    from typefast.injector import Typer
+    typer = object.__new__(Typer)   # no worker thread, no X connection
+    typer._cond = threading.Condition()
+    typer.delay_ms, typer.paste_threshold = 4, 300
+    typer._final = typer._final_active = None
+    typer._swap_from = typer._typed = typer._target = ""
+    typer._paste_started = 0.0
+    typer.__dict__.update(state)
+    return typer
+
+
+LONG_LIVE = "j'ai regardé la roadmap oro commerce " * 140   # ~5000 characters, like a 5 minute dictation
+LONG_FINAL = "J'ai regardé la roadmap OroCommerce.\n\n" * 130
+
+
+def test_swap_erases_everything_before_a_paste():
+    from typefast.injector import swap_edit
+    assert swap_edit("hola que", "Hola, que tal", paste=True) == textops.Edit(8, "Hola, que tal")
+    assert swap_edit("hola que", "hola que tal", paste=False) == textops.Edit(0, " tal")
+    assert swap_edit("", "Hola", paste=True) == textops.Edit(0, "Hola")
+
+
+def test_swap_estimate_shrinks_to_zero():
+    from typefast.injector import swap_seconds
+    full = swap_seconds(LONG_LIVE, LONG_FINAL, True, 4)
+    half = swap_seconds(LONG_LIVE[:2500], LONG_FINAL, True, 4)
+    assert full > half > swap_seconds("", LONG_FINAL, True, 4) > 0
+    assert full < 4.0   # a 5 minute dictation swaps in a few seconds
+    assert swap_seconds(LONG_FINAL, LONG_FINAL, True, 4) == 0
+
+
+def test_swap_progress_follows_the_erase_then_the_paste():
+    typer = idle_typer(_final_active=lambda ok, reason: None, _swap_from=LONG_LIVE, _target=LONG_FINAL)
+    seen = []
+    for typed in (LONG_LIVE, LONG_LIVE[:3000], LONG_LIVE[:500], ""):
+        typer._typed = typed
+        seen.append(typer.swap_progress())
+    assert [p.phase for p in seen] == ["erase", "erase", "erase", "paste"]
+    fractions = [p.fraction for p in seen]
+    assert fractions[0] == 0 and fractions == sorted(fractions) and fractions[-1] < 1
+    assert [p.seconds_left for p in seen] == sorted((p.seconds_left for p in seen), reverse=True)
+    assert idle_typer().swap_progress() is None   # no swap running
+
+
+def test_swap_never_pastes_into_another_window():
+    class Win:
+        def active_window(self):
+            return 2   # the dictation went into window 1
+
+    class Keys:
+        pasted = False
+
+        def paste(self, terminal, stop):
+            Keys.pasted = True
+            return True
+
+    typer = idle_typer(_final_active=lambda ok, reason: None, _swap_from=LONG_LIVE, _target=LONG_FINAL, _window=1,
+                       _gen=0, _hold=False, _paused_until=0.0, _frozen=False, _closing=False, _last_op=None,
+                       _last_op_end=0.0)
+    # The live text is all erased; only the paste is left.
+    assert typer._step(Win(), Keys(), "", LONG_FINAL, 0) is False
+    assert not Keys.pasted and typer.typed == ""
+
+
+def test_swap_cut_short_reports_whether_the_field_changed():
+    import threading
+    for typed, expected in ((LONG_LIVE[:100], "interrupted"), (LONG_LIVE, "moved")):
+        got, done = [], threading.Event()
+        typer = idle_typer(_final_active=lambda ok, reason: (got.append((ok, reason)), done.set()),
+                           _swap_from=LONG_LIVE, _typed=typed, _target=LONG_FINAL)
+        typer._fail_final("moved")
+        assert done.wait(2) and got == [(False, expected)]
+
+
 class TestStyles:
     def test_pick_text(self):
         from types import SimpleNamespace

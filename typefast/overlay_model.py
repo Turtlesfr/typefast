@@ -37,6 +37,12 @@ class OverlayModel:
     def style_key(self) -> str:
         return self.styles[self.style]
 
+    @property
+    def typed_is_new(self) -> bool:
+        """The typed letters are not a word yet, even if they start one ("Java" next to "JavaScript")."""
+        text = fold(" ".join(self.jump.split()))
+        return bool(text) and not any(fold(w) == text for w in self.words)
+
     def _clear_jump(self) -> None:
         self.jump, self.miss = "", False
 
@@ -108,9 +114,9 @@ class OverlayModel:
         """Apply one key press. Returns "start", "close" or None."""
         self.message = ""
         if name in ("Return", "KP_Enter"):
-            # Unmatched letters are a new word: Enter adds it instead of starting.
-            # Ctrl+Enter adds the letters even when they match an existing word.
-            if self.jump and (self.miss or ctrl):
+            # Letters that are not a word yet are a new word: Enter adds it instead of starting,
+            # also when they are the start of a longer word. Ctrl+Enter ticks an exact match.
+            if self.jump and (self.typed_is_new or ctrl):
                 self._add_typed()
                 return None
             return "start"
