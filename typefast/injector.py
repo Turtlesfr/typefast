@@ -8,14 +8,21 @@ real Ctrl press can never combine with an injected letter into Ctrl+W.
 """
 
 import logging
-import subprocess
+import sys
 import threading
 import time
 from dataclasses import dataclass
 
-from typefast import clipboard, textops
-from typefast.x11 import WindowInfo
-from typefast.xkeys import KeyInjector
+from typefast import textops
+
+if sys.platform == "win32":
+    from typefast.win import clipboard
+    from typefast.win.input import WindowInfo
+    from typefast.win.keys import KeyInjector
+else:
+    from typefast import clipboard
+    from typefast.x11 import WindowInfo
+    from typefast.xkeys import KeyInjector
 
 log = logging.getLogger(__name__)
 
@@ -62,21 +69,6 @@ def settle_delay(last_op: str | None, op: str, since: float) -> float:
     if last_op is None or last_op == op:
         return 0.0
     return max(0.0, DIRECTION_SETTLE_S - since)
-
-
-def _run(args, input_text=None, timeout=10.0, capture=True):
-    # `xclip -i` forks a child that keeps serving the clipboard; capturing its
-    # output would wait on that child forever, hence capture=False for it.
-    out = subprocess.PIPE if capture else subprocess.DEVNULL
-    try:
-        return subprocess.run(args, input=input_text, stdout=out, stderr=out, timeout=timeout, check=False)
-    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-        log.warning("%s failed: %s", args[0], e)
-        return None
-
-
-def _ok(result) -> bool:
-    return result is not None and result.returncode == 0
 
 
 class Typer:
@@ -380,4 +372,4 @@ class Typer:
 
 
 def copy_to_clipboard(text: str) -> None:
-    _run(["xclip", "-i", "-selection", "clipboard"], input_text=text.encode(), timeout=2.0, capture=False)
+    clipboard.hand_off(text)
