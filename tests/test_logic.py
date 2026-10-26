@@ -1,3 +1,7 @@
+import sys
+
+import pytest
+
 from typefast import config, languages, textops, vocab
 from typefast.taps import TapDetector
 
@@ -190,6 +194,7 @@ class TestConfig:
         assert cfg["trigger"] == {"key": "ctrl", "taps": 5, "window_ms": 1000}
         assert cfg["region"] == "us"
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix file modes")
     def test_write_json_is_private(self, tmp_path):
         p = tmp_path / "c.json"
         config.write_json(p, {"api_key": "x"}, private=True)
@@ -216,6 +221,7 @@ def test_normalize_survives_garbage():
     assert cfg["api_key"] == ""
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="X11 key injection")
 class TestKeyPlanning:
     def test_char_to_keysym(self):
         from typefast.xkeys import char_to_keysym
