@@ -21,7 +21,7 @@ USAGE = """commands:
 def setup_logging(debug: bool) -> None:
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     handlers = [logging.handlers.RotatingFileHandler(config.DATA_DIR / "typefast.log", maxBytes=1_000_000, backupCount=2)]
-    if debug or sys.stderr.isatty():
+    if debug or (sys.stderr and sys.stderr.isatty()):  # pythonw has no stderr
         handlers.append(logging.StreamHandler())
     logging.basicConfig(level=logging.DEBUG if debug else logging.INFO, handlers=handlers,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -49,6 +49,8 @@ def fatal_dialog(title: str, message: str) -> None:
 
 
 def check_environment() -> bool:
+    if sys.platform == "win32":
+        return True  # everything TypeFast needs ships with Windows or the Python packages
     if os.environ.get("XDG_SESSION_TYPE") == "wayland" or (os.environ.get("WAYLAND_DISPLAY") and not os.environ.get("DISPLAY")):
         fatal_dialog("TypeFast needs an X11 session",
                      "Wayland does not let apps listen to the keyboard globally or type into other windows.\n\n"
@@ -92,14 +94,10 @@ def main(argv=None) -> int:
         return 1
     setup_logging(args.debug)
 
-    import gi
-    gi.require_version("Gtk", "3.0")
     from typefast.app import TypeFastApp
 
     app = TypeFastApp()
-    if args.command in ("toggle", "overlay"):
-        from gi.repository import GLib
-        GLib.timeout_add(600, lambda: (app.open_overlay(), False)[1])
+    app.overlay_on_start = args.command in ("toggle", "overlay")
     app.run()
     return 0
 

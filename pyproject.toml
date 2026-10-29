@@ -14,9 +14,10 @@ dependencies = [
     "httpx>=0.27",
     "sounddevice>=0.4.6",
     "numpy>=1.22",
-    "python-xlib>=0.33",
+    "python-xlib>=0.33; sys_platform == 'linux'",
+    "PySide6-Essentials>=6.8; sys_platform == 'win32'",
 ]
-# PyGObject (GTK 3, AyatanaAppIndicator) and pycairo come from apt; see install.sh.
+# On Linux, PyGObject (GTK 3, AyatanaAppIndicator) and pycairo come from apt; see install.sh.
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]

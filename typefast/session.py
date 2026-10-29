@@ -32,7 +32,7 @@ class DictationSession:
         self.on_error = on_error
         self.on_polished = on_polished
         self.model = languages.live_model_for(language, cfg["live_model"])
-        self.live = textops.LiveTranscript()
+        self.live = textops.LiveTranscript(language)
         self.started_at = 0.0
         self.stopped_at = 0.0
         self.mic = Microphone(cfg.get("microphone"))

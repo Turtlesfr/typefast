@@ -2,11 +2,12 @@
 
 # TypeFast
 
-**Dictate anywhere on Ubuntu. See your words appear as you speak, then get a polished version a second later.**
+**Dictate anywhere on Ubuntu or Windows. See your words appear as you speak, then get a polished version a second later.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-f2b544.svg)](LICENSE)
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-1d2330.svg)
 ![Ubuntu on X11](https://img.shields.io/badge/Ubuntu-X11-E95420.svg)
+![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4.svg)
 ![Speech by AssemblyAI](https://img.shields.io/badge/speech-AssemblyAI-1d2330.svg)
 
 <img src="docs/screenshots/overlay.png" alt="The TypeFast overlay: style, language and vocabulary" width="860">
@@ -34,6 +35,8 @@ with your own API key (new accounts come with free credit).
 - **Your vocabulary.** Product names, people, places: tick them before dictating,
   add or delete them right from the overlay.
 - **32 languages**, with a quick-pick row for the ones you use.
+- **Spoken punctuation.** Say "comma" or "new line" (or "virgule", "à la ligne") and
+  get the symbol or the line break.
 - **Safe with your text.** TypeFast only ever replaces what it typed itself, and
   steps back the moment you touch the keyboard or mouse.
 
@@ -41,7 +44,9 @@ with your own API key (new accounts come with free credit).
 
 **1. Tap Ctrl three times.** The overlay opens over whatever you are doing, without
 stealing the focus from your app, so your cursor stays where it was. The last language
-you used is already selected: press **Enter** and start talking.
+you used is already selected: press **Enter** and start talking. (Windows has no way to
+read the keyboard without the focus, so there the overlay takes it and hands it back to
+your app before typing. Clicking elsewhere closes the overlay.)
 
 **2. Talk.** Words are typed into the focused field as you say them, and each sentence
 gets its punctuation when you pause. The bar at the top of the screen shows what was
@@ -104,6 +109,20 @@ lists, search, rename and tick words.
 
 <img src="docs/screenshots/vocabulary.png" alt="The vocabulary window" width="420">
 
+### Spoken punctuation
+
+AssemblyAI punctuates from your intonation, but you can also say the punctuation out
+loud. It is converted in the live text and in the final one.
+
+| Language | Commands |
+| --- | --- |
+| English | comma, semicolon, colon, question mark, exclamation mark, full stop, new line, new paragraph |
+| French | virgule, point virgule, deux points, point d'interrogation, point d'exclamation, point final, point à la ligne, à la ligne, retour à la ligne, nouvelle ligne, nouveau paragraphe |
+| Spanish | coma, punto y coma, dos puntos, signo de interrogación, signo de exclamación, punto final, punto y aparte, nueva línea, nuevo párrafo |
+
+A bare "period", "point" or "punto" stays a word ("the point is…"): say "full stop",
+"point final" or "punto final" instead. French gets its space before `; : ? !`.
+
 ## Under the hood
 
 ```mermaid
@@ -132,7 +151,8 @@ flowchart LR
 - **Typing.** Keys go through XTEST using only your active keyboard layout; characters
   that layout lacks (an `é` on a Spanish keyboard, say) are put on a spare key once.
   Before every key, TypeFast checks that you are not holding Ctrl, Alt or Shift, so an
-  injected letter never turns into a shortcut.
+  injected letter never turns into a shortcut. On Windows, keys go through `SendInput`,
+  which types any character whatever the layout, with the same Ctrl, Alt and Shift check.
 - **Safety.** TypeFast edits only text it typed. If you click, type or switch windows
   while dictating, it stops touching the field and puts the final text on the clipboard.
 
@@ -140,16 +160,29 @@ More detail, and the reasoning behind each choice, in [docs/DESIGN.md](docs/DESI
 
 ## Requirements
 
+On both systems:
+
+- **A microphone** and an internet connection.
+- **An AssemblyAI API key**, free at
+  [assemblyai.com/dashboard/api-keys](https://www.assemblyai.com/dashboard/api-keys).
+
+On Linux:
+
 - **Ubuntu 22.04 or newer.** Other GNOME distributions work if they show tray icons,
   for example with the "AppIndicator and KStatusNotifierItem Support" extension.
 - **An X11 session.** On the login screen, click the gear icon and choose
   **Ubuntu on Xorg**. Wayland does not let apps listen to the keyboard globally or type
   into other windows, so TypeFast cannot work there yet.
-- **A microphone** and an internet connection.
-- **An AssemblyAI API key**, free at
-  [assemblyai.com/dashboard/api-keys](https://www.assemblyai.com/dashboard/api-keys).
+
+On Windows:
+
+- **Windows 10 or 11.**
+- **Python 3.10 or newer** from [python.org](https://www.python.org/downloads/windows/)
+  or the Microsoft Store, and [Git](https://git-scm.com/download/win).
 
 ## Install
+
+### Ubuntu
 
 ```bash
 git clone https://github.com/turtlesfr/typefast.git
@@ -162,11 +195,29 @@ some are missing), creates a Python environment inside the folder, adds a `typef
 command and an app launcher, and starts TypeFast at login. Use
 `./install.sh --no-autostart` to skip the login item.
 
+### Windows
+
+In PowerShell:
+
+```powershell
+git clone https://github.com/turtlesfr/typefast.git
+cd typefast
+py -m venv .venv
+.venv\Scripts\pip install -e .
+.venv\Scripts\pythonw -m typefast
+```
+
+`pythonw` starts TypeFast without a console window; only its icon shows up in the
+notification area. To start it at login, tick **Start TypeFast when I sign in to Windows** in Settings.
+
+### First launch
+
 On first launch, Settings opens: paste your AssemblyAI key, press **Test**, then **Save**.
 
 ## Settings
 
-Click the microphone icon in the top bar, then **Settings…**
+Click the microphone icon in the top bar (in the notification area on Windows), then
+**Settings…**
 
 <img src="docs/screenshots/settings.png" alt="The settings window" width="560">
 
@@ -178,8 +229,9 @@ Click the microphone icon in the top bar, then **Settings…**
   position of the **live bar** (top or bottom), **data region** (US or EU), start at login,
   and an option to drop `¿` and `¡` from Spanish text.
 
-Prefer a regular shortcut? Bind `typefast toggle` in
-**Settings > Keyboard > Custom Shortcuts**. Other commands: `typefast settings`,
+Prefer a regular shortcut? On Ubuntu, bind `typefast toggle` in
+**Settings > Keyboard > Custom Shortcuts**. On Windows the commands are
+`.venv\Scripts\typefast toggle` and so on. Other commands: `typefast settings`,
 `typefast vocabulary`, `typefast quit`, `typefast --debug`.
 
 ## Cost and privacy
@@ -191,7 +243,8 @@ fraction of a cent when it runs. Check [AssemblyAI pricing](https://www.assembly
 for current numbers.
 
 Your API key, vocabulary and history stay on your computer, in `~/.config/typefast/` and
-`~/.local/share/typefast/`, readable only by you. TypeFast talks to nothing but
+`~/.local/share/typefast/`, readable only by you (on Windows, the same folders under
+your user folder, such as `C:\Users\you\.config\typefast\`). TypeFast talks to nothing but
 AssemblyAI. Pick the EU data region in Settings to keep processing in the European Union.
 
 ## Troubleshooting
@@ -203,20 +256,30 @@ AssemblyAI. Pick the EU data region in Settings to keep processing in the Europe
   more than 10 seconds and tells you when it kept the live text.
 - **A character came out wrong:** open an issue with your layout (`setxkbmap -query`) and
   the text that went wrong.
-- **Logs:** `~/.local/share/typefast/typefast.log`.
+- **Nothing is typed in some Windows apps:** Windows does not let a normal program type
+  into an app running as administrator. Run that app normally, or TypeFast as
+  administrator too.
+- **Logs:** `~/.local/share/typefast/typefast.log` (on Windows,
+  `C:\Users\you\.local\share\typefast\typefast.log`).
 
 ## Uninstall
+
+On Ubuntu:
 
 ```bash
 ./uninstall.sh          # keeps your settings and vocabulary
 ./uninstall.sh --purge  # removes them too
 ```
 
+On Windows, untick **Start TypeFast when I sign in to Windows** in Settings, quit TypeFast from its tray menu and
+delete the `typefast` folder. Your settings and vocabulary are in `.config\typefast` and
+`.local\share\typefast` under your user folder; delete them too if you want.
+
 ## Development
 
 ```bash
-.venv/bin/pip install -e ".[dev]"
-.venv/bin/python -m pytest
+.venv/bin/pip install -e ".[dev]"      # Windows: .venv\Scripts\pip install -e ".[dev]"
+.venv/bin/python -m pytest             # Windows: .venv\Scripts\python -m pytest
 ```
 
 The unit tests cover the tap detector, the overlay keys, vocabulary rules, text edits,
@@ -231,6 +294,8 @@ need a real X session or the real API:
 | `scripts/chrome_paste_check.py` | The same in a real Chrome (temporary profile), checked through DevTools. |
 | `scripts/long_swap_check.py` | The swap after a 5 minute dictation, timed, in a GTK field and in Chrome. |
 | `scripts/e2e_pipeline.py` | A 16 kHz mono PCM file through the live and polish passes with your key. |
+| `scripts/win_input_check.py` | Windows: the key injector, the input listener and the modifier check, in a throwaway text box. |
+| `scripts/win_typer_check.py` | Windows: live updates, a held Ctrl, typed and pasted swaps, in a throwaway text box. |
 
 Project layout:
 
@@ -242,12 +307,13 @@ Project layout:
 | `typefast/injector.py`, `xkeys.py`, `clipboard.py` | Typing and pasting into other apps |
 | `typefast/x11.py`, `taps.py` | Global key listener and the triple-tap detector |
 | `typefast/hud.py`, `windows.py`, `tray.py` | Live bar, settings and vocabulary windows, tray menu |
+| `typefast/win/` | Windows counterparts, same classes and methods: hooks and `SendInput` (`input.py`, `keys.py`), clipboard, and the Qt windows (`qt.py`, `overlay.py`, `hud.py`, `tray.py`, `windows.py`) |
 
 ## Credits
 
 Speech recognition, the Dictation API and the LLM Gateway by
-[AssemblyAI](https://www.assemblyai.com). Built with GTK 3, python-xlib, httpx,
-websockets and sounddevice.
+[AssemblyAI](https://www.assemblyai.com). Built with GTK 3 and python-xlib on Linux,
+Qt (PySide6) on Windows, httpx, websockets and sounddevice.
 
 ## License
 
