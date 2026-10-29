@@ -131,6 +131,40 @@ class TestFinalize:
         assert t.startswith("… ") and t.endswith("epsilon")
 
 
+class TestSpokenPunctuation:
+    def sp(self, text, lang="fr"):
+        return textops.spoken_punctuation(text, lang)
+
+    def test_comma_replaces_the_transcribers_own(self):
+        assert self.sp("Bonjour virgule je voulais") == "Bonjour, je voulais"
+        assert self.sp("Bonjour, virgule, je voulais") == "Bonjour, je voulais"
+
+    def test_line_breaks(self):
+        assert self.sp("Bonjour Camille. À la ligne. J'ai regardé") == "Bonjour Camille.\nJ'ai regardé"
+        assert self.sp("merci point à la ligne bonne journée") == "merci.\nBonne journée"
+        assert self.sp("Points clés nouveau paragraphe premier point") == "Points clés\n\nPremier point"
+        assert self.sp("retour à la ligne ensuite") == "\nEnsuite"
+
+    def test_french_spacing_and_capitals(self):
+        assert self.sp("On se voit quand point d'interrogation demain") == "On se voit quand ? Demain"
+        assert self.sp("Trois choses deux points le prix") == "Trois choses : le prix"
+        assert self.sp("c'est fini point final") == "c'est fini."
+
+    def test_bare_point_is_a_word(self):
+        assert self.sp("Le point important, c'est le prix.") == "Le point important, c'est le prix."
+
+    def test_partial_at_the_end(self):
+        assert self.sp("Bonjour virgule") == "Bonjour,"
+
+    def test_english_and_spanish(self):
+        assert self.sp("Hi Ana comma can we meet question mark", "en") == "Hi Ana, can we meet?"
+        assert self.sp("Thanks. New line. Best", "en") == "Thanks.\nBest"
+        assert self.sp("Hola coma qué tal punto y aparte nos vemos", "es") == "Hola, qué tal.\nNos vemos"
+
+    def test_other_languages_untouched(self):
+        assert self.sp("Hallo Komma wie geht's", "de") == "Hallo Komma wie geht's"
+
+
 class TestVocabulary:
     def test_sorted_ignoring_case_and_accents(self, tmp_path):
         v = vocab.Vocabulary(tmp_path / "v.json")

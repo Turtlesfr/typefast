@@ -291,7 +291,7 @@ class TypeFastApp:
                 self.hud.show_error("AssemblyAI is slow right now: the live text stays",
                                     "If the polished version arrives, it goes to Recent dictations (tray menu).", seconds=6)
             return False
-        chosen = styles.pick_text(session.style, result)
+        chosen = textops.spoken_punctuation(styles.pick_text(session.style, result), session.language)
         text = textops.finalize(chosen, self.cfg["strip_inverted_punctuation"])
         if not result.ok and text and live:
             # Some segments failed: the polished text is missing part of the speech.
@@ -371,7 +371,7 @@ class TypeFastApp:
         entry = session.history_entry
         if entry is None:
             return False
-        chosen = styles.pick_text(session.style, result)
+        chosen = textops.spoken_punctuation(styles.pick_text(session.style, result), session.language)
         entry["clean"], entry["verbatim"] = result.clean, result.verbatim
         entry["polished_late"] = textops.finalize(chosen, self.cfg["strip_inverted_punctuation"])
         self.history.save()
