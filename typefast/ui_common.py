@@ -1,5 +1,6 @@
-"""Shared GTK helpers for the overlay and the HUD."""
+"""Shared GTK helpers for the overlay and the HUD, and the event loop app.py drives."""
 
+import signal
 from pathlib import Path
 
 import gi
@@ -11,6 +12,32 @@ from Xlib import X, display, protocol  # noqa: E402
 
 ICONS_DIR = Path(__file__).parent / "icons"
 _css_loaded = False
+
+# The event loop, with the same names as typefast/win/qt.py.
+idle_add = GLib.idle_add
+
+
+def timeout_add(ms: int, fn) -> None:
+    GLib.timeout_add(ms, lambda: (fn(), False)[1])
+
+
+def init() -> None:
+    load_css()
+    Gtk.IconTheme.get_default().append_search_path(str(ICONS_DIR))
+
+
+def run_main(on_quit) -> None:
+    GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT, on_quit)
+    GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, on_quit)
+    Gtk.main()
+
+
+def quit_main() -> None:
+    Gtk.main_quit()
+
+
+def is_visible(win: Gtk.Window) -> bool:
+    return win.get_visible()
 
 
 def load_css() -> None:

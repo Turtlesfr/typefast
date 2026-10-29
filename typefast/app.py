@@ -3,24 +3,32 @@
 import logging
 import os
 import shutil
-import signal
 import sys
 import time
 from pathlib import Path
 
-from gi.repository import GLib, Gtk
-
 from typefast import config, ipc, styles, textops
 from typefast.history import History
-from typefast.hud import Hud
 from typefast.injector import Typer, copy_to_clipboard
-from typefast.overlay import Overlay
 from typefast.session import DictationSession
-from typefast.tray import Tray
-from typefast.ui_common import ICONS_DIR, bring_to_front, load_css
 from typefast.vocab import Vocabulary
-from typefast.windows import SettingsWindow, VocabularyWindow
-from typefast.x11 import InputListener
+
+if sys.platform == "win32":
+    from typefast.win import autostart_enabled, set_autostart
+    from typefast.win import qt as ui
+    from typefast.win.hud import Hud
+    from typefast.win.input import InputListener
+    from typefast.win.overlay import Overlay
+    from typefast.win.tray import Tray
+    from typefast.win.windows import SettingsWindow, VocabularyWindow
+else:
+    from typefast import ui_common as ui
+    from typefast.hud import Hud
+    from typefast.overlay import Overlay
+    from typefast.tray import Tray
+    from typefast.ui_common import ICONS_DIR
+    from typefast.windows import SettingsWindow, VocabularyWindow
+    from typefast.x11 import InputListener
 
 log = logging.getLogger(__name__)
 
@@ -66,12 +74,12 @@ class TypeFastApp:
         self.freeze_reason = None     # "key" or "click" once the user touched the field
         self.freeze_time = 0.0
         self.stream_failed = False
+        self.overlay_on_start = False  # started by `typefast toggle` with nothing running
 
     # -- startup --------------------------------------------------------------------
 
     def run(self) -> None:
-        load_css()
-        Gtk.IconTheme.get_default().append_search_path(str(ICONS_DIR))
+        ui.init()
         self.hud = Hud()
         self.hud.position = self.cfg["hud_position"]
         self.hud.trigger_hint = self.trigger_hint
@@ -88,20 +96,20 @@ class TypeFastApp:
         self.tray.set_history(self.history.entries)
         t = self.cfg["trigger"]
         self.listener = InputListener(
-            on_gesture=lambda: GLib.idle_add(self.toggle),
+            on_gesture=lambda: ui.idle_add(self.toggle),
             on_trigger_down=lambda: self.typer.hold(True),
             on_trigger_up=self._on_trigger_up,
             on_user_input=self._on_user_input,
             trigger_key=t["key"], taps=t["taps"], window_ms=t["window_ms"],
         )
         self.listener.start()
-        self.ipc = ipc.Server(lambda cmd: GLib.idle_add(self._command, cmd))
-        GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT, self.quit)
-        GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, self.quit)
+        self.ipc = ipc.Server(lambda cmd: ui.idle_add(self._command, cmd))
         if not self.cfg["api_key"]:
-            GLib.idle_add(self.open_settings, True)
+            ui.idle_add(self.open_settings, True)
+        elif self.overlay_on_start:
+            ui.timeout_add(600, self.open_overlay)
         log.info("TypeFast running, trigger %s", self.trigger_hint)
-        Gtk.main()
+        ui.run_main(self.quit)
 
     @property
     def trigger_hint(self) -> str:
@@ -145,7 +153,7 @@ class TypeFastApp:
             return
         self.typer.freeze()
         self.freeze_reason, self.freeze_time = kind, time.monotonic()
-        GLib.idle_add(self.hud.notice, "Typing paused because you used the keyboard or mouse. "
+        ui.idle_add(self.hud.notice, "Typing paused because you used the keyboard or mouse. "
                                        "The final text will go to the clipboard.")
 
     def _on_first_type(self, window_id: int) -> None:
@@ -155,7 +163,7 @@ class TypeFastApp:
         """Typer thread: another window took the focus while we were typing."""
         if self.freeze_reason is None:
             self.freeze_reason, self.freeze_time = "focus", time.monotonic()
-        GLib.idle_add(self.hud.notice, "Typing paused because another window took the focus. "
+        ui.idle_add(self.hud.notice, "Typing paused because another window took the focus. "
                                        "The final text will go to the clipboard.")
 
     # -- overlay -----------------------------------------------------------------------
@@ -204,10 +212,10 @@ class TypeFastApp:
             holder = {}
             session = DictationSession(
                 self.cfg, language, keyterms,
-                on_live=lambda text: GLib.idle_add(self._on_live, text, holder["s"]),
-                on_error=lambda msg: GLib.idle_add(self._on_stream_error, msg, holder["s"]),
-                on_polished=lambda result: GLib.idle_add(self._on_polished, result, holder["s"]),
-                on_late=lambda result: GLib.idle_add(self._on_late_polish, result, holder["s"]),
+                on_live=lambda text: ui.idle_add(self._on_live, text, holder["s"]),
+                on_error=lambda msg: ui.idle_add(self._on_stream_error, msg, holder["s"]),
+                on_polished=lambda result: ui.idle_add(self._on_polished, result, holder["s"]),
+                on_late=lambda result: ui.idle_add(self._on_late_polish, result, holder["s"]),
                 style=style,
             )
             holder["s"] = session
@@ -311,7 +319,7 @@ class TypeFastApp:
             return False
 
         def replaced(ok: bool, reason: str) -> None:
-            GLib.idle_add(self._after_replace, ok, reason, text, session, result)
+            ui.idle_add(self._after_replace, ok, reason, text, session, result)
 
         # The polish is done; a long live text still takes a few seconds to swap.
         self.state = "replacing"
@@ -387,10 +395,10 @@ class TypeFastApp:
         self.tray.set_history([])
 
     def open_settings(self, first_run: bool = False) -> bool:
-        if self.settings_win and self.settings_win.win.get_visible():
-            bring_to_front(self.settings_win.win)
+        if self.settings_win and ui.is_visible(self.settings_win.win):
+            ui.bring_to_front(self.settings_win.win)
             return False
-        self.settings_win = SettingsWindow(self.cfg, AUTOSTART_FILE.exists(), self._save_settings, first_run=first_run)
+        self.settings_win = SettingsWindow(self.cfg, autostart_enabled(), self._save_settings, first_run=first_run)
         return False
 
     def _save_settings(self, cfg: dict, autostart: bool) -> None:
@@ -406,8 +414,8 @@ class TypeFastApp:
         set_autostart(autostart)
 
     def open_vocabulary(self) -> None:
-        if self.vocab_win and self.vocab_win.win.get_visible():
-            bring_to_front(self.vocab_win.win)
+        if self.vocab_win and ui.is_visible(self.vocab_win.win):
+            ui.bring_to_front(self.vocab_win.win)
             return
         self.vocab = Vocabulary()
         self.vocab_win = VocabularyWindow(self.vocab)
@@ -418,13 +426,19 @@ class TypeFastApp:
         self.listener.stop()
         self.ipc.close()
         self.typer.close()  # gives back the spare keycodes used for missing characters
-        Gtk.main_quit()
+        if hasattr(self.tray, "icon"):
+            self.tray.icon.hide()  # Windows leaves a dead tray icon until the mouse passes over it
+        ui.quit_main()
         return False
 
 
-def set_autostart(enabled: bool) -> None:
-    if enabled:
-        AUTOSTART_FILE.parent.mkdir(parents=True, exist_ok=True)
-        AUTOSTART_FILE.write_text(desktop_entry(autostart=True))
-    elif AUTOSTART_FILE.exists():
-        AUTOSTART_FILE.unlink()
+if sys.platform != "win32":
+    def autostart_enabled() -> bool:
+        return AUTOSTART_FILE.exists()
+
+    def set_autostart(enabled: bool) -> None:
+        if enabled:
+            AUTOSTART_FILE.parent.mkdir(parents=True, exist_ok=True)
+            AUTOSTART_FILE.write_text(desktop_entry(autostart=True))
+        elif AUTOSTART_FILE.exists():
+            AUTOSTART_FILE.unlink()
